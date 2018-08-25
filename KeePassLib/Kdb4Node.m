@@ -328,6 +328,140 @@
     return size;
 }
 
+- (Kdb4Entry*)deepCopy {
+    Kdb4Entry *entry = [[Kdb4Entry alloc] init];
+    
+    // Don't copy the history, just the entry itself.
+    entry.image = self.image;
+    entry.creationTime = self.creationTime;
+    entry.lastModificationTime = self.lastModificationTime;
+    entry.lastAccessTime = self.lastAccessTime;
+    entry.expiryTime = self.expiryTime;
+
+    entry.uuid = self.uuid;  // Shallow copy OK
+    entry.titleStringField = [self.titleStringField copy];
+    entry.usernameStringField = [self.usernameStringField copy];
+    entry.passwordStringField = [self.passwordStringField copy];
+    entry.urlStringField = [self.urlStringField copy];
+    entry.notesStringField = [self.notesStringField copy];
+    entry.customIconUuid = [self.customIconUuid copy];
+    entry.foregroundColor = self.foregroundColor;
+    entry.backgroundColor = self.backgroundColor;
+    entry.overrideUrl = self.overrideUrl;
+    entry.tags = self.tags;
+    entry.expires = self.expires;
+    entry.usageCount = self.usageCount;
+    entry.locationChanged = self.locationChanged;
+    
+    for (StringField *f in self.stringFields) {
+        [entry.stringFields addObject:[f copy]];
+    }
+    
+    for (NSString *key in self.binaryDict) {
+        BinaryRef *br = self.binaryDict[key];
+        BinaryRef *brcopy = [[BinaryRef alloc] init];
+        brcopy.key = [br.key copy];
+        brcopy.index = br.index;
+        brcopy.data = br.data; // shallow copy.
+        entry.binaryDict[brcopy.key] = brcopy;
+    }
+    
+    // Handle AutoType
+    entry.autoType = [[AutoType alloc] init];
+    entry.autoType.enabled = self.autoType.enabled;
+    entry.autoType.dataTransferObfuscation = self.autoType.dataTransferObfuscation;
+    entry.autoType.defaultSequence = [self.autoType.defaultSequence copy];
+    for (Association *a in self.autoType.associations) {
+        Association *acopy = [[Association alloc] init];
+        acopy.window = [a.window copy];
+        acopy.keystrokeSequence = [a.keystrokeSequence copy];
+        [entry.autoType.associations addObject:acopy];
+    }
+
+    return entry;
+}
+
+- (BOOL)hasChanged:(Kdb4Entry*)entry {
+    BOOL isEqual = ![super hasChanged:entry];
+    
+    if (!isEqual) return YES;
+
+    isEqual = [entry.titleStringField contentsEqual:self.titleStringField];
+    isEqual &= [entry.usernameStringField contentsEqual:self.usernameStringField];
+    isEqual &= [entry.passwordStringField contentsEqual:self.passwordStringField];
+    isEqual &= [entry.urlStringField contentsEqual:self.urlStringField];
+    isEqual &= [entry.notesStringField contentsEqual:self.notesStringField];
+    if (!isEqual) return YES;
+    
+    if (entry.stringFields.count != self.stringFields.count) return YES;
+    for (int i=0; i<self.stringFields.count; ++i) {
+        isEqual &= [self.stringFields[i] contentsEqual:entry.stringFields[i]];
+    }
+    if (!isEqual) return YES;
+    
+    isEqual &= [entry.overrideUrl isEqualToString:self.overrideUrl];
+
+    // No way to change the following within MiniKeePass so we don't check.
+    // customIconUuid
+    // foregroundColor;
+    // backgroundColor;
+    // binaries
+    // autoType
+    
+    return !isEqual;
+}
+
+- (void)removeOldestBackup {
+    Kdb4Entry *oldestEntry;
+    
+    if (self.history.count == 0) return;
+    
+    oldestEntry = self.history[0];
+    
+    for (Kdb4Entry *e in self.history) {
+        if ([e.lastModificationTime compare:oldestEntry.lastModificationTime] == NSOrderedAscending) {
+            oldestEntry = e;
+        }
+    }
+    
+    [self.history removeObject:oldestEntry];
+}
+
+- (NSInteger)getSize {
+    NSInteger size = 128;  // Fixed data size approx.
+    
+    size += self.titleStringField.value.length;
+    size += self.titleStringField.key.length;
+    size += self.usernameStringField.value.length;
+    size += self.usernameStringField.key.length;
+    size += self.passwordStringField.value.length;
+    size += self.passwordStringField.key.length;
+    size += self.urlStringField.value.length;
+    size += self.urlStringField.key.length;
+    size += self.notesStringField.value.length;
+    size += self.notesStringField.key.length;
+    
+    for (StringField *f in self.stringFields) {
+        size += f.value.length;
+        size += f.key.length;
+    }
+    
+    for (NSString *key in self.binaryDict) {
+        BinaryRef *br = self.binaryDict[key];
+        size += br.key.length;
+        size += br.data.length;
+    }
+    
+    // Handle AutoType Here.
+    size += self.autoType.defaultSequence.length;
+    for (Association *a in self.autoType.associations) {
+        size += a.window.length;
+        size += a.keystrokeSequence.length;
+    }
+
+    return size;
+}
+
 @end
 
 
